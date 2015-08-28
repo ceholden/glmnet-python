@@ -1,5 +1,6 @@
 import numpy as np
-from glmnet import elastic_net
+
+from .glmnet import elastic_net
 
 class ElasticNet(object):
     """ElasticNet based on GLMNET"""

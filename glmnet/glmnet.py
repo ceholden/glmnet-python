@@ -1,16 +1,18 @@
 import numpy as np
-import _glmnet
+
+from . import _glmnet
 
 _DEFAULT_THRESH = 1.0e-4
 _DEFAULT_FLMIN = 0.001
 _DEFAULT_NLAM = 100
+
 
 def elastic_net(predictors, target, balance, memlimit=None,
                 largest=None, **kwargs):
     """
     Raw-output wrapper for elastic net linear regression.
     """
-    
+
     # Mandatory parameters
     predictors = np.asanyarray(predictors)
     target = np.asanyarray(target)

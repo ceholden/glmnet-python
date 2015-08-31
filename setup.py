@@ -1,12 +1,8 @@
-from numpy.distutils.misc_util import Configuration
-from numpy.distutils.system_info import get_info
-import os, sys
-
+import os
 import sys
 
-fflags= '-fdefault-real-8 -ffixed-form'
-
-# TODO: Fix it so that these flags are default.
+from numpy.distutils.misc_util import Configuration
+from numpy.distutils.system_info import get_info
 
 config = Configuration(
     'glmnet',
@@ -14,10 +10,15 @@ config = Configuration(
     top_path=None
 )
 
-f_sources = ['glmnet/glmnet.pyf','glmnet/glmnet.f']
+f_sources = ['glmnet/glmnet.pyf', 'glmnet/glmnet.f']
+fflags = ['-fdefault-real-8', '-ffixed-form']
 
-config.add_extension(name='_glmnet',sources=f_sources)
+config.add_extension(name='_glmnet',
+                     sources=f_sources,
+                     extra_f77_compile_args=fflags,
+                     extra_f90_compile_args=fflags)
 config_dict = config.todict()
+
 if __name__ == '__main__':
     from numpy.distutils.core import setup
     setup(version='1.1-5',
@@ -29,4 +30,3 @@ if __name__ == '__main__':
           requires=['NumPy (>= 1.3)'],
           packages=['glmnet'],
           **config_dict)
-

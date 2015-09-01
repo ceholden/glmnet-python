@@ -19,17 +19,17 @@ def elastic_net(predictors, target, balance, memlimit=None,
 
     # Decide on largest allowable models for memory/convergence.
     memlimit = predictors.shape[1] if memlimit is None else memlimit
-    
+
     # If largest isn't specified use memlimit.
     largest = memlimit if largest is None else largest
-    
+
     if memlimit < largest:
         raise ValueError('Need largest <= memlimit')
 
     # Flags determining overwrite behavior
     overwrite_pred_ok = False
     overwrite_targ_ok = False
-    
+
     thr = _DEFAULT_THRESH   # Minimum change in largest coefficient
     weights = None          # Relative weighting per observation case
     vp = None               # Relative penalties per predictor (0 = no penalty)
@@ -66,14 +66,15 @@ def elastic_net(predictors, target, balance, memlimit=None,
             flmin = kwargs[keyword]
             ulam = None
         elif keyword == 'nlam':
-            if 'lambdas' in kwargs:
-                raise ValueError("Can't specify both lambdas & nlam keywords")
+            if kwargs.get('lambdas'):
+                continue  # let `lambdas` override nlam
+                # raise ValueError("Can't specify both lambdas & nlam keywords")
             nlam = kwargs[keyword]
         else:
             raise ValueError("Unknown keyword argument '%s'" % keyword)
 
     # If predictors is a Fortran contiguous array, it will be overwritten.
-    # Decide whether we want this. If it's not Fortran contiguous it will 
+    # Decide whether we want this. If it's not Fortran contiguous it will
     # be copied into that form anyway so there's no chance of overwriting.
     if np.isfortran(predictors):
         if not overwrite_pred_ok:
@@ -84,20 +85,20 @@ def elastic_net(predictors, target, balance, memlimit=None,
     # with the standardized version unless we take steps to copy it.
     if not overwrite_targ_ok:
         target = target.copy()
-    
+
     # Uniform weighting if no weights are specified.
     if weights is None:
         weights = np.ones(predictors.shape[0])
-    
+
     # Uniform penalties if none were specified.
     if vp is None:
         vp = np.ones(predictors.shape[1])
-    
+
     # Call the Fortran wrapper.
     lmu, a0, ca, ia, nin, rsq, alm, nlp, jerr =  \
             _glmnet.elnet(balance, predictors, target, weights, jd, vp,
                           memlimit, flmin, ulam, thr, nlam=nlam)
-    
+
     # Check for errors, documented in glmnet.f.
     if jerr != 0:
         if jerr == 10000:

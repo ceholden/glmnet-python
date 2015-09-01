@@ -17,14 +17,15 @@ class ElasticNet(object):
     Args:
         alpha (float): ElasticNet mixing parameter (0 <= alpha <= 1.0)
             specifying the mix of Ridge L2 (``alpha=0``) to Lasso L1
-            (``alpha=1``) regularization.
+            (``alpha=1``) regularization (default: 0.5).
         lambdas (iterable, or None): Constant that controls the degree
             of regularization. If None are specified, ``n_lambdas``
-            number of lambdas are set automatically
+            number of lambdas are set automatically (default: None).
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
+            (default: 1).
         fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered.
+            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -64,11 +65,6 @@ class ElasticNet(object):
 
         """
         weights = weights or np.ones(y.shape[0])
-
-        # Compute lambdas if necessary
-        if self.lambdas is None:
-            raise NotImplementedError(
-                'Have not added auto-calc of lambdas yet')
 
         # Fit elastic net
         n_lambdas, intercepts_, coefs_, ia, nin, rsquareds_, lambdas, _, jerr \
@@ -175,11 +171,12 @@ class Lasso(ElasticNet):
     Args:
         lambdas (iterable, or None): Constant that controls the degree
             of regularization. If None are specified, ``n_lambdas``
-            number of lambdas are set automatically
+            number of lambdas are set automatically (default: None).
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
+            (default: 1).
         fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered.
+            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -209,16 +206,17 @@ class ElasticNetIC(ElasticNet):
     Args:
         alpha (float): ElasticNet mixing parameter (0 <= alpha <= 1.0)
             specifying the mix of Ridge L2 (``alpha=0``) to Lasso L1
-            (``alpha=1``) regularization.
+            (``alpha=1``) regularization (default: 0.5).
         lambdas (iterable, or None): Constant that controls the degree
             of regularization. If None are specified, ``n_lambdas``
-            number of lambdas are set automatically
+            number of lambdas are set automatically (default: None).
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
+            (default: 1).
         criterion (str): Information criterion used to select best ``lambdas``
-            for fit. Available ICs are AIC (default), BIC, and AICc.
+            for fit. Available ICs are AIC, BIC, and AICc (default: AIC).
         fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered.
+            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -264,13 +262,14 @@ class LassoIC(ElasticNetIC):
     Args:
         lambdas (iterable, or None): Constant that controls the degree
             of regularization. If None are specified, ``n_lambdas``
-            number of lambdas are set automatically
+            number of lambdas are set automatically (default: None).
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
+            (default: 1).
         criterion (str): Information criterion used to select best ``lambdas``
             for fit. Available ICs are AIC (default), BIC, and AICc.
         fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered.
+            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients

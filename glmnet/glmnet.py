@@ -59,7 +59,7 @@ def elastic_net(predictors, target, balance, memlimit=None,
         elif keyword == 'lambdas':
             if 'flmin' in kwargs:
                 raise ValueError("Can't specify both lambdas & flmin keywords")
-            ulam = np.asarray(kwargs[keyword])
+            ulam = np.atleast_1d(kwargs[keyword])
             flmin = 2. # Pass flmin > 1.0 indicating to use the user-supplied.
             nlam = len(ulam)
         elif keyword == 'flmin':

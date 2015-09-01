@@ -16,8 +16,7 @@ def mse_path(coefs, X, y):
         np.ndarray: mean squared error as 1D array (n_lambdas)
 
     """
-    if coefs.ndim == 1:
-        coefs = coefs[:, np.newaxis]
+    coefs = np.atleast_2d(coefs)
 
     resid = y[:, np.newaxis] - np.dot(X, coefs)
     mse = (resid ** 2).mean(axis=0)

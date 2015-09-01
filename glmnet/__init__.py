@@ -1,1 +1,1 @@
-from .elastic_net import ElasticNet, Lasso
+from .elastic_net import ElasticNet, Lasso, ElasticNetIC, LassoIC

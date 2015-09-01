@@ -47,7 +47,8 @@ def elastic_net(predictors, target, balance, memlimit=None,
         elif keyword == 'threshold':
             thr = kwargs[keyword]
         elif keyword == 'weights':
-            weights = np.asarray(kwargs[keyword]).copy()
+            if np.all(kwargs.get(keyword)):
+                weights = np.asarray(kwargs[keyword]).copy()
         elif keyword == 'penalties':
             vp = kwargs[keyword].copy()
         elif keyword == 'standardize':
@@ -60,15 +61,14 @@ def elastic_net(predictors, target, balance, memlimit=None,
             if 'flmin' in kwargs:
                 raise ValueError("Can't specify both lambdas & flmin keywords")
             ulam = np.atleast_1d(kwargs[keyword])
-            flmin = 2. # Pass flmin > 1.0 indicating to use the user-supplied.
+            flmin = 2.  # Pass flmin > 1.0 indicating to use the user-supplied.
             nlam = len(ulam)
         elif keyword == 'flmin':
             flmin = kwargs[keyword]
             ulam = None
         elif keyword == 'nlam':
-            if kwargs.get('lambdas'):
+            if kwargs.get('lambdas') is not None:
                 continue  # let `lambdas` override nlam
-                # raise ValueError("Can't specify both lambdas & nlam keywords")
             nlam = kwargs[keyword]
         else:
             raise ValueError("Unknown keyword argument '%s'" % keyword)
@@ -96,8 +96,8 @@ def elastic_net(predictors, target, balance, memlimit=None,
 
     # Call the Fortran wrapper.
     lmu, a0, ca, ia, nin, rsq, alm, nlp, jerr =  \
-            _glmnet.elnet(balance, predictors, target, weights, jd, vp,
-                          memlimit, flmin, ulam, thr, nlam=nlam)
+        _glmnet.elnet(balance, predictors, target, weights, jd, vp,
+                      memlimit, flmin, ulam, thr, nlam=nlam, isd=isd)
 
     # Check for errors, documented in glmnet.f.
     if jerr != 0:

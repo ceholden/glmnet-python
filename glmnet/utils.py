@@ -3,35 +3,40 @@
 import numpy as np
 
 
-def mse_path(coefs, X, y):
+def mse_path(X, y, coefs, intercepts):
     """ Return mean squared error for sets of estimated coefficients
 
     Args:
-        coefs (np.ndarray): 1 or 2D array of coefficients estimated from
-            GLMNET using one or more ``lambdas`` (n_coef x n_lambdas)
         X (np.ndarray): 2D (n_obs x n_features) design matrix
         y (np.ndarray): 1D dependent variable
+        coefs (np.ndarray): 1 or 2D array of coefficients estimated from
+            GLMNET using one or more ``lambdas`` (n_coef x n_lambdas)
+        intercepts (np.ndarray): 1 or 2D array of intercepts from
+            GLMNET using one or more ``lambdas`` (n_lambdas)
 
     Returns:
         np.ndarray: mean squared error as 1D array (n_lambdas)
 
     """
     coefs = np.atleast_2d(coefs)
+    intercepts = np.atleast_1d(intercepts)
 
-    resid = y[:, np.newaxis] - np.dot(X, coefs)
+    resid = y[:, np.newaxis] - (np.dot(X, coefs) + intercepts)
     mse = (resid ** 2).mean(axis=0)
 
     return mse
 
 
-def IC_path(coefs, X, y, criterion='AIC'):
+def IC_path(X, y, coefs, intercepts, criterion='AIC'):
     """ Return AIC, BIC, or AICc for sets of estimated coefficients
 
     Args:
-        coefs (np.ndarray): 1 or 2D array of coefficients estimated from
-            GLMNET using one or more ``lambdas`` (n_coef x n_lambdas)
         X (np.ndarray): 2D (n_obs x n_features) design matrix
         y (np.ndarray): 1D dependent variable
+        coefs (np.ndarray): 1 or 2D array of coefficients estimated from
+            GLMNET using one or more ``lambdas`` (n_coef x n_lambdas)
+        intercepts (np.ndarray): 1 or 2D array of intercepts from
+            GLMNET using one or more ``lambdas`` (n_lambdas)
         criterion (str): AIC (Akaike Information Criterion), BIC (Bayesian
             Information Criterion), or AICc (Akaike Information Criterion
             corrected for finite sample sizes)
@@ -42,8 +47,7 @@ def IC_path(coefs, X, y, criterion='AIC'):
     Note: AIC and BIC calculations taken from scikit-learn's LarsCV
 
     """
-    if coefs.ndim == 1:
-        coefs = coefs[:, np.newaxis]
+    coefs = np.atleast_2d(coefs)
 
     n_samples = y.shape[0]
 
@@ -51,12 +55,11 @@ def IC_path(coefs, X, y, criterion='AIC'):
     if criterion == 'aic' or criterion == 'aicc':
         K = 2
     elif criterion == 'bic':
-        K = log(n_samples)
+        K = np.log(n_samples)
     else:
         raise ValueError('Criterion must be either AIC, BIC, or AICc')
 
-    resid = y[:, np.newaxis] - np.dot(X, coefs)
-    mse = np.mean(resid ** 2, axis=0)
+    mse = mse_path(X, y, coefs, intercepts)
 
     df = np.zeros(coefs.shape[1], dtype=np.int)
     for k, coef in enumerate(coefs.T):
@@ -71,35 +74,3 @@ def IC_path(coefs, X, y, criterion='AIC'):
             criterion_ += (2 * df * (df + 1)) / (n_samples - df - 1)
 
     return criterion_
-
-
-def plot_paths(results, which_to_label=None):
-    import matplotlib
-    import matplotlib.pyplot as plt
-    plt.clf()
-    interactive_state = plt.isinteractive()
-    xvalues = -np.log(results.lambdas[1:])
-    for index, path in enumerate(results.coefficients):
-        if which_to_label and results.indices[index] in which_to_label:
-            if which_to_label[results.indices[index]] is None:
-                label = "$x_{%d}$" % results.indices[index]
-            else:
-                label = which_to_label[results.indices[index]]
-        else:
-            label = None
-
-
-        if which_to_label and label is None:
-            plt.plot(xvalues, path[1:], ':')
-        else:
-            plt.plot(xvalues, path[1:], label=label)
-
-    plt.xlim(np.amin(xvalues), np.amax(xvalues))
-
-    if which_to_label is not None:
-        plt.legend(loc='upper left')
-    plt.title('Regularization paths ($\\rho$ = %.2f)' % results.balance)
-    plt.xlabel('$-\log(\lambda)$')
-    plt.ylabel('Value of regression coefficient $\hat{\\beta}_i$')
-    plt.show()
-    plt.interactive(interactive_state)

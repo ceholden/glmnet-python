@@ -2,7 +2,7 @@ TODO:
 
 1. [ ] Implement ElasticNet/Lasso CV & IC classes
     * [x] IC
-    * [ ] CV
+    * [x] CV
 2. [x] Test / ensure class is pickle-able using joblib
     * Yes
 3. [x] Speed timing comparison sklearn vs glmnet wrapper

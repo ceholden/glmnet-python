@@ -1,7 +1,10 @@
+import inspect
+
 import numpy as np
+import six
 
 from .glmnet import elastic_net
-from .utils import mse_path, IC_path
+from .utils import IC_path, mse_path
 
 
 class ElasticNet(object):
@@ -24,8 +27,7 @@ class ElasticNet(object):
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
             (default: 1).
-        fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered (default: True).
+        standardize (bool): standardize X before fitting (default: True)
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -40,12 +42,12 @@ class ElasticNet(object):
                  alpha=0.5,
                  lambdas=None,
                  n_lambdas=1,
-                 fit_intercept=True):
+                 standardize=True):
         super(ElasticNet, self).__init__()
         self.alpha = alpha
         self.lambdas = lambdas
         self.n_lambdas = n_lambdas
-        self.fit_intercept = fit_intercept
+        self.standardize = standardize
 
         self.coefs_, self.intercepts_, self.rsquareds_ = None, None, None
 
@@ -64,27 +66,16 @@ class ElasticNet(object):
                 chaining
 
         """
-        weights = weights or np.ones(y.shape[0])
-
         # Fit elastic net
-        n_lambdas, intercepts_, coefs_, ia, nin, rsquareds_, lambdas, _, jerr \
-            = elastic_net(X, y, self.alpha,
-                          lambdas=self.lambdas,
-                          weights=weights)
-
-        # ia is 1 indexed
-        ia = np.trim_zeros(ia, 'b') - 1
-
-        # glmnet.f returns coefficients as 'compressed' array that
-        # requires re-indexing using ia and nin
-        self.coefs_ = np.zeros_like(coefs_)
-        self.coefs_[ia, :] = coefs_[:np.max(nin), :n_lambdas]
-        self.intercepts_ = intercepts_
-        self.rsquareds_ = rsquareds_
+        kwargs = dict(weights=weights,
+                      lambdas=self.lambdas,
+                      nlam=self.n_lambdas)
+        self.intercepts_, self.coefs_, self.rsquareds_, lambdas = \
+            enet_path(X, y, alpha=self.alpha, **kwargs)
 
         # Calculate "best" lambda for prediction based on some criteria
-        self._lambda_score = self._score_lambda(X, y)
-        self._idx_best_lambda = self._best_lambda(self._lambda_score)
+        self.mse_path_ = self._score_lambda(X, y)
+        self._idx_best_lambda = self._best_lambda(self.mse_path_)
         self.lambda_ = lambdas[self._idx_best_lambda]
 
         return self
@@ -99,7 +90,7 @@ class ElasticNet(object):
             np.ndarray: 1D yhat prediction
 
         """
-        return (np.dot(X, self.coef_) + self.intercept_)
+        return np.dot(X, self.coef_) + self.intercept_
 
     @property
     def coef_(self):
@@ -117,7 +108,7 @@ class ElasticNet(object):
             return self.rsquareds_[self._idx_best_lambda]
 
     def _score_lambda(self, X, y):
-        return mse_path(self.coefs_, X, y)
+        return mse_path(X, y, self.coefs_, self.intercepts_)
 
     def _best_lambda(self, scores):
         return np.argmin(scores)
@@ -139,24 +130,77 @@ class ElasticNet(object):
         """
         try:
             import matplotlib.pyplot as plt
-            avail = plt.style.available
+            plt.style.available
         except (ImportError, AttributeError):
             raise ImportError('Requires matplotlib>=1.4.0 for plotting')
 
-        with plt.style.context('ggplot'):
-            plt.subplot(211)
-            plt.plot(-np.log10(self.lambdas), self._lambda_score, ls='--', lw=2)
-            plt.axvline(-np.log10(self.lambda_), lw=2, ls='--', color='k')
-            plt.ylabel('Score (%s)' % self._score_method)
+        x_lambda, x_lambdas = -np.log10(self.lambda_), -np.log10(self.lambdas)
 
-            plt.subplot(212)
-            plt.plot(-np.log10(self.lambdas), self.coefs_.T, ls='--', lw=2)
-            plt.axvline(-np.log10(self.lambda_), lw=2, ls='--', color='k')
-            plt.xlabel('$-\log(\lambda)$')
-            plt.ylabel('Coefficient $\hat{\\beta}_i$')
+        with plt.style.context('ggplot'):
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
+
+            if self.mse_path_.ndim == 1:
+                ax1.plot(x_lambdas, self.mse_path_, ls='--', lw=2)
+            else:
+                mean_score = np.mean(self.mse_path_, axis=1)
+                std_score = np.std(self.mse_path_, axis=1)
+                ax1.plot(x_lambdas, mean_score, ls='--', lw=2)
+                ax1.errorbar(x_lambdas, mean_score, yerr=std_score,
+                             fmt='', ls='', c='grey')
+
+            ax1.axvline(x_lambda, lw=2, ls='--', color='k')
+            ax1.set_ylabel('%s' % self._score_method)
+
+            ax2.plot(x_lambdas, self.coefs_.T, ls='--', lw=2)
+            ax2.axvline(x_lambda, lw=2, ls='--', color='k')
+            ax2.set_xlabel('$-\log(\lambda)$')
+            ax2.set_ylabel('Coefficient $\hat{\\beta}_i$')
+
+            fig.suptitle('%s ($\\lambda = %s$)' % (self.__class__.__name__,
+                                                   x_lambda),
+                         fontsize='16')
 
             plt.tight_layout()
             plt.show()
+
+    def get_params(self):
+        """ Return parameters for this estimator
+
+        Returns:
+            dict: parameter names mapped to their values
+
+        """
+        # Get our own __init__ signature
+        args, _, _, _ = inspect.getargspec(self.__init__)
+        args.pop(0)  # remove `self` from __init__
+
+        params = dict()
+        for key in args:
+            params[key] = getattr(self, key, None)
+
+        return params
+
+    def set_params(self, **params):
+        """ Set parameters for estimator
+
+        Args:
+            params (dict): dict of parameter=value to set
+
+        Returns:
+            self
+        """
+        if not params:
+            return self
+
+        _params = self.get_params()
+
+        for key, value in six.iteritems(params):
+            if key not in _params:
+                raise ValueError('Invalid parameter %s for %s' %
+                                 (key, self.__class__.__name__))
+            setattr(self, key, value)
+
+        return self
 
 
 class Lasso(ElasticNet):
@@ -175,8 +219,7 @@ class Lasso(ElasticNet):
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
             (default: 1).
-        fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered (default: True).
+        standardize (bool): standardize X before fitting (default: True)
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -186,11 +229,11 @@ class Lasso(ElasticNet):
 
     """
 
-    def __init__(self, lambdas=None, n_lambdas=1, fit_intercept=True):
+    def __init__(self, lambdas=None, n_lambdas=1, standardize=True):
         super(Lasso, self).__init__(alpha=1.0,
                                     lambdas=lambdas,
                                     n_lambdas=n_lambdas,
-                                    fit_intercept=fit_intercept)
+                                    standardize=standardize)
 
 
 class ElasticNetIC(ElasticNet):
@@ -213,10 +256,9 @@ class ElasticNetIC(ElasticNet):
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
             (default: 1).
+        standardize (bool): standardize X before fitting (default: True)
         criterion (str): Information criterion used to select best ``lambdas``
             for fit. Available ICs are AIC, BIC, and AICc (default: AIC).
-        fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -225,26 +267,22 @@ class ElasticNetIC(ElasticNet):
         lambda_ (float): value of lambda used when fitting model
 
     """
-
     def __init__(self,
                  alpha=0.5,
                  lambdas=None,
                  n_lambdas=1,
-                 criterion='aic',
-                 fit_intercept=True):
-        if criterion.lower() not in ('aic', 'bic', 'aicc'):
-            raise ValueError('Criterion must be either AIC, BIC, or AICc')
-        self.criterion = criterion
+                 standardize=True,
+                 criterion='aic'):
         self._score_method = criterion
-
         super(ElasticNetIC, self).__init__(
             alpha=alpha,
             lambdas=lambdas,
             n_lambdas=n_lambdas,
-            fit_intercept=fit_intercept)
+            standardize=standardize)
 
     def _score_lambda(self, X, y):
-        return IC_path(self.coefs_, X, y, criterion=self.criterion)
+        return IC_path(X, y, self.coefs_, self.intercepts_,
+                       criterion=self.criterion)
 
     def _best_lambda(self, scores):
         return np.argmin(scores)
@@ -266,10 +304,9 @@ class LassoIC(ElasticNetIC):
         n_lambdas (int or None): If ``lambdas`` is None, ``n_lambdas``
             controls the number of automatically calculated ``lambdas``
             (default: 1).
+        standardize (bool): standardize X before fitting (default: True)
         criterion (str): Information criterion used to select best ``lambdas``
             for fit. Available ICs are AIC (default), BIC, and AICc.
-        fit_intercept (bool): Fit intercept for the model. If False,
-            data are already assumed to be centered (default: True).
 
     Attributes:
         coef_ (np.ndarray): 1D array of model coefficients
@@ -282,22 +319,66 @@ class LassoIC(ElasticNetIC):
     def __init__(self,
                  lambdas=None,
                  n_lambdas=1,
-                 criterion='aic',
-                 fit_intercept=True):
+                 standardize=True,
+                 criterion='aic'):
         self.criterion = criterion
         super(LassoIC, self).__init__(
             lambdas=lambdas,
             n_lambdas=n_lambdas,
-            fit_intercept=fit_intercept)
+            standardize=standardize)
 
 
-def elastic_net_path(X, y, alpha=0.5, **kwargs):
-    """Return full path for ElasticNet"""
-    n_lambdas, intercepts, coefs, _, _, _, lambdas, _, jerr \
-    = elastic_net(X, y, alpha, **kwargs)
-    return lambdas, coefs, intercepts
+def path_residuals(X, y, train, test, alpha=0.5, **kwargs):
+    """ Fit on test and return MSE of all ``lamdbas`` in test samples
+
+    Args:
+        X (np.ndarray): 2D (n_obs x n_features) design matrix
+        y (np.ndarray): 1D independent variable
+        train (np.ndarray): indices of X/y for training model
+        test (np.ndarray): indices of X/y for testing model and MSE calculation
+        alpha (float): ElasticNet mixing parameter (0 <= alpha <= 1.0)
+            specifying the mix of Ridge L2 (``alpha=0``) to Lasso L1
+            (``alpha=1``) regularization (default: 0.5).
+        kwargs: additional arguments provided to GLMNET
+
+    Returns:
+        np.ndarray: mean squared error (MSE) for each lambda specified in
+            ``kwargs``
+
+    """
+    X_train, y_train = X[train], y[train]
+    X_test, y_test = X[test], y[test]
+
+    intercepts, coefs, _, _ = enet_path(X_train, y_train,
+                                        alpha=alpha, **kwargs)
+
+    return mse_path(X_test, y_test, coefs, intercepts)
 
 
-def lasso_path(X, y, **kwargs):
-    """ Return full path for Lasso"""
-    return elastic_net_path(X, y, alpha=1.0, **kwargs)
+def enet_path(X, y, alpha=0.5, **kwargs):
+    """ Convenience wrapper for running elastic_net that transforms coefs
+
+    Args:
+        X (np.ndarray): 2D (n_obs x n_features) design matrix
+        y (np.ndarray): 1D independent variable
+        alpha (float): ElasticNet mixing parameter (0 <= alpha <= 1.0)
+            specifying the mix of Ridge L2 (``alpha=0``) to Lasso L1
+            (``alpha=1``) regularization (default: 0.5).
+        kwargs: additional arguments provided to GLMNET
+
+    Returns:
+        tuple: intercepts, coefficients, rsquareds, and lambdas as np.ndarrays
+
+    """
+    n_lambdas, intercepts_, coefs_, ia, nin, rsquareds_, lambdas, _, jerr \
+        = elastic_net(X, y, alpha, **kwargs)
+
+    # ia is 1 indexed
+    ia = np.trim_zeros(ia, 'b') - 1
+
+    # glmnet.f returns coefficients as 'compressed' array that
+    # requires re-indexing using ia and nin
+    coefs = np.zeros_like(coefs_)
+    coefs[ia, :] = coefs_[:np.max(nin), :n_lambdas]
+
+    return intercepts_, coefs, rsquareds_, lambdas

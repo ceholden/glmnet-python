@@ -185,6 +185,7 @@ class ElasticNet(object):
             if deep and hasattr(value, 'get_params'):
                 deep_items = value.get_params().items()
                 params.update((key + '__' + k, val) for k, val in deep_items)
+            params[key] = value
 
         return params
 

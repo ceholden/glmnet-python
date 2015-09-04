@@ -163,8 +163,12 @@ class ElasticNet(object):
             plt.tight_layout()
             plt.show()
 
-    def get_params(self):
+    def get_params(self, deep=True):
         """ Return parameters for this estimator
+
+        Args:
+            deep (bool): return the parameters from parameters of this
+                estimator that are also estimators
 
         Returns:
             dict: parameter names mapped to their values
@@ -176,7 +180,11 @@ class ElasticNet(object):
 
         params = dict()
         for key in args:
-            params[key] = getattr(self, key, None)
+            value = getattr(self, key, None)
+
+            if deep and hasattr(value, 'get_params'):
+                deep_items = value.get_params().items()
+                params.update((key + '__' + k, val) for k, val in deep_items)
 
         return params
 

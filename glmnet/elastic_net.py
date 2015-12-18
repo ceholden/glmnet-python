@@ -1,13 +1,14 @@
 import inspect
 
 import numpy as np
+import sklearn
 import six
 
 from .glmnet import elastic_net
 from .utils import IC_path, mse_path
 
 
-class ElasticNet(object):
+class ElasticNet(sklearn.base.BaseEstimator):
     """ ElasticNet based on GLMNET
 
     Fit an elastic net model with a fixed L1/L2 penalty mixing
@@ -176,54 +177,6 @@ class ElasticNet(object):
 
             plt.tight_layout()
             plt.show()
-
-    def get_params(self, deep=True):
-        """ Return parameters for this estimator
-
-        Args:
-            deep (bool): return the parameters from parameters of this
-                estimator that are also estimators
-
-        Returns:
-            dict: parameter names mapped to their values
-
-        """
-        # Get our own __init__ signature
-        args, _, _, _ = inspect.getargspec(self.__init__)
-        args.pop(0)  # remove `self` from __init__
-
-        params = dict()
-        for key in args:
-            value = getattr(self, key, None)
-
-            if deep and hasattr(value, 'get_params'):
-                deep_items = value.get_params().items()
-                params.update((key + '__' + k, val) for k, val in deep_items)
-            params[key] = value
-
-        return params
-
-    def set_params(self, **params):
-        """ Set parameters for estimator
-
-        Args:
-            params (dict): dict of parameter=value to set
-
-        Returns:
-            self
-        """
-        if not params:
-            return self
-
-        _params = self.get_params()
-
-        for key, value in six.iteritems(params):
-            if key not in _params:
-                raise ValueError('Invalid parameter %s for %s' %
-                                 (key, self.__class__.__name__))
-            setattr(self, key, value)
-
-        return self
 
 
 class Lasso(ElasticNet):

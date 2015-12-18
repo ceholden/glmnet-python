@@ -1,8 +1,5 @@
-import inspect
-
 import numpy as np
 import sklearn
-import six
 
 from .glmnet import elastic_net
 from .utils import IC_path, mse_path
@@ -75,7 +72,7 @@ class ElasticNet(sklearn.base.BaseEstimator):
         """
         # Override n_lambdas if user specified some
         if self.lambdas is not None:
-            self.n_lambdas_ = self.lambdas.shape[0]
+            self.n_lambdas_ = np.atleast_1d(self.lambdas).shape[0]
         else:
             self.n_lambdas_ = self.n_lambdas
         # Fit elastic net

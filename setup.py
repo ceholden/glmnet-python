@@ -1,6 +1,8 @@
 import os
 import sys
 
+from numpy.distutils.misc_util import Configuration
+
 # Get version
 with open('glmnet/version.py') as f:
     for line in f:
@@ -10,8 +12,6 @@ with open('glmnet/version.py') as f:
             version = version.strip("'")
             continue
 
-from numpy.distutils.misc_util import Configuration
-from numpy.distutils.system_info import get_info
 
 config = Configuration(
     'glmnet',
@@ -36,6 +36,7 @@ if __name__ == '__main__':
           author_email='dwf@cs.toronto.edu',
           url='github.com/dwf/glmnet-python',
           license='GPL2',
-          requires=['NumPy (>= 1.3)'],
+          install_requires=['numpy>=1.3',
+                            'scikit-learn>=0.14.0'],
           packages=['glmnet'],
           **config_dict)

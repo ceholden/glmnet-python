@@ -65,7 +65,7 @@ class ElasticNetCV(ElasticNet):
             n_lambdas=n_lambdas,
             standardize=standardize)
 
-    def fit(self, X, y, weights=None):
+    def fit(self, X, y, weights=None, penalties=None, **kwargs):
         """ Fit a model predicting y from X design matrix
 
         Args:
@@ -74,6 +74,12 @@ class ElasticNetCV(ElasticNet):
             weights (np.ndarray): 1D array of weights for each
                 observation in ``y``. If None, all observations are
                 weighted equally
+            penalties (np.ndarray, or None): 1D array of penalty weights for
+                each feature in X. If None, all features are penalized
+                equivalently. Features given a ``0`` penalty will not be
+                penalized at all.
+            kwargs (dict, optional): additional keyword arguments provided to
+                ``glmnet.glmnet.elastic_net`` function
 
         Returns:
             object: return `self` with model results stored for method
@@ -87,9 +93,12 @@ class ElasticNetCV(ElasticNet):
             cv = check_cv(self.cv, X=X, y=y, classifier=False)
         folds = list(cv)
 
-        kwargs = dict(weights=weights,
-                      lambdas=self.lambdas,
-                      nlam=self.n_lambdas)
+        kwargs.update({
+            'lambdas': self.lambdas,
+            'nlam': self.n_lambdas,
+            'weights': weights,
+            'penalties': penalties
+        })
         jobs = (delayed(path_residuals)(X, y, train, test,
                                         alpha=self.alpha, **kwargs)
                 for train, test in folds)
@@ -110,7 +119,7 @@ class ElasticNetCV(ElasticNet):
                              if name in model.get_params())
         model.set_params(**common_params)
         model.lambdas = self.lambdas
-        model.fit(X, y, weights=weights)
+        model.fit(X, y, **kwargs)
 
         # Update `self` with model results
         self.coefs_ = model.coefs_

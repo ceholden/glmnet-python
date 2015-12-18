@@ -7,71 +7,62 @@ _DEFAULT_FLMIN = 0.001
 _DEFAULT_NLAM = 100
 
 
-def elastic_net(predictors, target, balance, memlimit=None,
-                largest=None, **kwargs):
-    """
-    Raw-output wrapper for elastic net linear regression.
-    """
+def elastic_net(predictors, target, balance,
+                memlimit=None, largest=None, thr=_DEFAULT_THRESH,
+                weights=None, penalties=None, standardize=True, exclude=None,
+                lambdas=None, flmin=None, nlam=None,
+                overwrite_pred_ok=False, overwrite_targ_ok=True):
+    """ Raw-output wrapper for elastic net linear regression.
 
-    # Mandatory parameters
-    predictors = np.asanyarray(predictors)
-    target = np.asanyarray(target)
-
+    Args:
+        predictors (np.ndarray): X design matrix
+        target (np.ndarray): y dependent variables
+        balance (float): Family member index (0 is ridge, 1 is Lasso)
+        memlimit (int): Maximum number of variables allowed to enter all models
+            along path
+        largest (int): Maximum number of variables allowed to enter largest
+            model
+        thr (float): Minimum change in largest coefficient
+        weights (np.ndarray): Relative weighting per observation case
+        penalties (np.ndarray): Relative penalties per predictor (0 = no
+            penalty)(vp in Fortran code)
+        standardize (bool): Standardize input variables before proceeding?
+            (isd in Fortran code)
+        exclude (np.ndarray): Predictors to exclude altogether from fitting
+            (jd in Fortran code)
+        lambdas (np.ndarray): User specified lambda values (ulam in Fortran
+            code). Do not specify ``lambdas`` if ``flmin`` or ``nlam`` are also
+            provided.
+        flmin (float): Fraction of largest lambda at which to stop
+            (default: 0.001)
+        nlam (int): The (maximum) number of lambdas to try (default: 100)
+        overwrite_pred_ok (bool): Allow overwriting of X
+        overwrite_targ_ok (bool): Allow overwriting of y
+    """
     # Decide on largest allowable models for memory/convergence.
     memlimit = predictors.shape[1] if memlimit is None else memlimit
-
     # If largest isn't specified use memlimit.
     largest = memlimit if largest is None else largest
-
     if memlimit < largest:
         raise ValueError('Need largest <= memlimit')
 
-    # Flags determining overwrite behavior
-    overwrite_pred_ok = False
-    overwrite_targ_ok = False
+    if exclude is not None:
+        # Add one since Fortran indices start at 1
+        exclude += 1
+        jd = np.array([len(exclude)] + exclude)
+    else:
+        jd = np.zeros(1)
 
-    thr = _DEFAULT_THRESH   # Minimum change in largest coefficient
-    weights = None          # Relative weighting per observation case
-    vp = None               # Relative penalties per predictor (0 = no penalty)
-    isd = True              # Standardize input variables before proceeding?
-    jd = np.zeros(1)        # Predictors to exclude altogether from fitting
-    ulam = None             # User-specified lambda values
-    flmin = _DEFAULT_FLMIN  # Fraction of largest lambda at which to stop
-    nlam = _DEFAULT_NLAM    # The (maximum) number of lambdas to try.
-
-    for keyword in kwargs:
-        if keyword == 'overwrite_pred_ok':
-            overwrite_pred_ok = kwargs[keyword]
-        elif keyword == 'overwrite_targ_ok':
-            overwrite_targ_ok = kwargs[keyword]
-        elif keyword == 'threshold':
-            thr = kwargs[keyword]
-        elif keyword == 'weights':
-            if np.all(kwargs.get(keyword)):
-                weights = np.asarray(kwargs[keyword]).copy()
-        elif keyword == 'penalties':
-            vp = kwargs[keyword].copy()
-        elif keyword == 'standardize':
-            isd = bool(kwargs[keyword])
-        elif keyword == 'exclude':
-            # Add one since Fortran indices start at 1
-            exclude = (np.asarray(kwargs[keyword]) + 1).tolist()
-            jd = np.array([len(exclude)] + exclude)
-        elif keyword == 'lambdas':
-            if 'flmin' in kwargs:
-                raise ValueError("Can't specify both lambdas & flmin keywords")
-            ulam = np.atleast_1d(kwargs[keyword])
-            flmin = 2.  # Pass flmin > 1.0 indicating to use the user-supplied.
-            nlam = len(ulam)
-        elif keyword == 'flmin':
-            flmin = kwargs[keyword]
-            ulam = None
-        elif keyword == 'nlam':
-            if kwargs.get('lambdas') is not None:
-                continue  # let `lambdas` override nlam
-            nlam = kwargs[keyword]
-        else:
-            raise ValueError("Unknown keyword argument '%s'" % keyword)
+    if lambdas is not None and flmin is not None:
+        raise ValueError("Can't specify both lambdas & flmin keywords")
+    elif lambdas is not None:
+        lambdas = np.atleast_1d(lambdas)
+        flmin = 2.  # Pass flmin > 1.0 indicating to use the user-supplied.
+        nlam = len(lambdas)
+    else:
+        lambdas = None
+        flmin = _DEFAULT_FLMIN
+        nlam = _DEFAULT_NLAM
 
     # If predictors is a Fortran contiguous array, it will be overwritten.
     # Decide whether we want this. If it's not Fortran contiguous it will
@@ -80,8 +71,7 @@ def elastic_net(predictors, target, balance, memlimit=None,
         if not overwrite_pred_ok:
             # Might as well make it F-ordered to avoid ANOTHER copy.
             predictors = predictors.copy(order='F')
-
-    # target being a 1-dimensional array will usually be overwritten
+    # Target being a 1-dimensional array will usually be overwritten
     # with the standardized version unless we take steps to copy it.
     if not overwrite_targ_ok:
         target = target.copy()
@@ -91,13 +81,14 @@ def elastic_net(predictors, target, balance, memlimit=None,
         weights = np.ones(predictors.shape[0])
 
     # Uniform penalties if none were specified.
-    if vp is None:
-        vp = np.ones(predictors.shape[1])
+    if penalties is None:
+        penalties = np.ones(predictors.shape[1])
 
     # Call the Fortran wrapper.
     lmu, a0, ca, ia, nin, rsq, alm, nlp, jerr =  \
-        _glmnet.elnet(balance, predictors, target, weights, jd, vp,
-                      memlimit, flmin, ulam, thr, nlam=nlam, isd=isd)
+        _glmnet.elnet(balance, predictors, target, weights, jd, penalties,
+                      memlimit, flmin, lambdas, thr,
+                      nlam=nlam, isd=standardize)
 
     # Check for errors, documented in glmnet.f.
     if jerr != 0:

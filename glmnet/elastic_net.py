@@ -51,7 +51,7 @@ class ElasticNet(object):
 
         self.coefs_, self.intercepts_, self.rsquareds_ = None, None, None
 
-    def fit(self, X, y, weights=None):
+    def fit(self, X, y, weights=None, penalties=None, **kwargs):
         """ Fit a model predicting y from X design matrix
 
         Args:
@@ -60,16 +60,30 @@ class ElasticNet(object):
             weights (np.ndarray): 1D array of weights for each
                 observation in ``y``. If None, all observations are
                 weighted equally
+            penalties (np.ndarray, or None): 1D array of penalty weights for
+                each feature in X. If None, all features are penalized
+                equivalently. Features given a ``0`` penalty will not be
+                penalized at all.
+            kwargs (dict, optional): additional keyword arguments provided to
+                ``glmnet.glmnet.elastic_net`` function
 
         Returns:
             object: return `self` with model results stored for method
                 chaining
 
         """
+        # Override n_lambdas if user specified some
+        if self.lambdas is not None:
+            self.n_lambdas_ = self.lambdas.shape[0]
+        else:
+            self.n_lambdas_ = self.n_lambdas
         # Fit elastic net
-        kwargs = dict(weights=weights,
-                      lambdas=self.lambdas,
-                      nlam=self.n_lambdas)
+        kwargs.update({
+            'lambdas': self.lambdas,
+            'nlam': self.n_lambdas_,
+            'weights': weights,
+            'penalties': penalties
+        })
         self.intercepts_, self.coefs_, self.rsquareds_, lambdas = \
             enet_path(X, y, alpha=self.alpha, **kwargs)
 

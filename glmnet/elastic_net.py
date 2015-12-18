@@ -129,16 +129,18 @@ class ElasticNet(sklearn.base.BaseEstimator):
         return np.argmin(scores)
 
     def __str__(self):
+        if self.coef_ is None:  # If not fitted
+            return("Unfitted %s" % self.__class__.__name__)
         coef = self.coef_
         n_nonzero = (np.abs(coef) > np.finfo(coef.dtype).eps).sum()
-        return ("%s with %d non-zero coefficients (%.2f%%):\n"
-                " * Intercept = %.7f\n"
-                " * Alpha = %.7f\n"
-                " * Lambda = %.7f\n"
-                " * Training R^2: %.4f") % (self.__class__.__name__, n_nonzero,
-                                            n_nonzero / float(len(coef)) * 100,
-                                            self.intercept_, self.alpha,
-                                            self.lambda_, self.rsquared_)
+        return("%s with %d non-zero coefficients (%.2f%%):\n"
+               " * Intercept = %.7f\n"
+               " * Alpha = %.7f\n"
+               " * Lambda = %.7f\n"
+               " * Training R^2: %.4f") % (self.__class__.__name__, n_nonzero,
+                                           n_nonzero / float(len(coef)) * 100,
+                                           self.intercept_, self.alpha,
+                                           self.lambda_, self.rsquared_)
 
     def plot(self):
         """ Plot regularization path and scores of ``lambdas``
